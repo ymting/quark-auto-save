@@ -393,12 +393,17 @@
                         </div>
                         <input type="text" name="pattern[]" class="form-control" v-model="task.pattern" placeholder="匹配表达式" list="magicRegex" @dblclick="inputRawMagicRegex(task)" title="双击可将魔法匹配释放为填入原始正则表达式">
                         <div class="input-group-prepend" title="剧集季数：仅在替换表达式留空时对 $TV 剧集规则生效，把季号固定为所选季">
-                          <span class="input-group-text px-1">季数</span>
+                          <span class="input-group-text px-2">季数</span>
                         </div>
-                        <select name="season[]" class="form-control" style="flex: 0 0 74px;" v-model="task.season" :disabled="!isTvRegex(task.pattern)" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
-                          <option value="">原始</option>
-                          <option v-for="n in 10" :key="n" :value="String(n)">S{{ String(n).padStart(2, '0') }}</option>
-                        </select>
+                        <div class="dropdown" style="flex: 0 0 92px;" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
+                          <button class="btn btn-outline-secondary dropdown-toggle w-100 text-left season-toggle" type="button" data-toggle="dropdown" :disabled="!isTvRegex(task.pattern)">
+                            {{ task.season ? 'S' + String(task.season).padStart(2, '0') : '原始' }}
+                          </button>
+                          <div class="dropdown-menu season-menu">
+                            <a class="dropdown-item" href="#" @click.prevent="task.season = ''" :class="{active: !task.season}">原始</a>
+                            <a class="dropdown-item" href="#" v-for="n in 30" :key="n" @click.prevent="task.season = String(n)" :class="{active: task.season === String(n)}">S{{ String(n).padStart(2, '0') }}</a>
+                          </div>
+                        </div>
                         <input type="text" name="replace[]" class="form-control" v-model="task.replace" placeholder="替换表达式">
                         <div class="input-group-append" title="保存时只比较文件名的部分，01.mp4 和 01.mkv 视同为同一文件，不重复转存">
                           <div class="input-group-text">
