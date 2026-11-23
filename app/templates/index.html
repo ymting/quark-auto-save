@@ -743,11 +743,14 @@
         window.removeEventListener('beforeunload', this.handleBeforeUnload);
       },
       methods: {
-        // $TV 展开后的匹配表达式，用于判定任务是否使用剧集正则（与后端 MagicRename.TV_PATTERN 一致）
+        // 是否剧集正则：兼容内置魔法名 $TV、配置里自定义魔法名（如 $TV_REGEX）、
+        // 以及双击释放出的原始正则。与后端 MagicRename.TV_PATTERN 判定一致。
         isTvRegex(pattern) {
           const tvPattern = ".*?([Ss]\\d{1,2})?(?:[第EePpXx\\.\\-\\_\\( ]{1,2}|^)(\\d{1,3})(?!\\d).*?\\.(mp4|mkv)";
+          if (!pattern) return false;
+          if (pattern === '$TV') return true; // 内置魔法名不在用户配置里，需显式识别
           const raw = this.formData.magic_regex[pattern] ? this.formData.magic_regex[pattern].pattern : pattern;
-          return !!pattern && raw === tvPattern;
+          return raw === tvPattern;
         },
         changeTab(tab) {
           this.activeTab = tab;

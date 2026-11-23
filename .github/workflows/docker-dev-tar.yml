@@ -1,4 +1,4 @@
-name: Build Dev Image (GHCR + .tar)
+name: Build Image (GHCR + .tar)
 
 on:
   workflow_dispatch:
@@ -16,10 +16,7 @@ concurrency:
 
 env:
   IMAGE_NAME: quark-auto-save
-  IMAGE_TAG: dev
   GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/quark-auto-save
-  RELEASE_TAG: dev-latest
-  TAR_NAME: quark-auto-save-dev.tar
 
 jobs:
   build:
@@ -31,6 +28,16 @@ jobs:
           ref: dev
           fetch-depth: 0
 
+      - name: Read version & resolve tags
+        id: version
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          SHA=$(git rev-parse --short HEAD)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "版本: ${VERSION} (${SHA})"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -41,25 +48,25 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build dev image (linux/amd64)
+      # 一次构建打多个 tag：latest / dev / 版本号 / sha，保证同一 digest
+      - name: Build image (linux/amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: false
-          load: true
+          push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.GHCR_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.GHCR_IMAGE }}:latest
+            ${{ env.GHCR_IMAGE }}:dev
+            ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.version_tag }}
+            ${{ env.GHCR_IMAGE }}:${{ steps.version.outputs.sha_tag }}
           build-args: |
             MAINTAINER=${{ github.repository_owner }}
             BRANCH=${{ github.ref_name }}
             BUILD_SHA=${{ github.sha }}
-            BUILD_TAG=${{ env.IMAGE_TAG }}
-
-      - name: Push image to GHCR
-        run: docker push "${GHCR_IMAGE}:${IMAGE_TAG}"
+            BUILD_TAG=${{ steps.version.outputs.version_tag }}
 
       - name: Make GHCR package public
         env:
@@ -71,23 +78,29 @@ jobs:
             "user/packages/container/${IMAGE_NAME}" \
             -f visibility=public || echo "::warning::设置 package 可见性失败，请到包设置页手动改为 Public"
 
-      - name: Export image to .tar (docker save)
+      # 从 GHCR 拉回 latest，导出 .tar（保证与线上镜像同一 digest）
+      - name: Pull image & export to .tar (docker save)
+        env:
+          TAR_NAME: quark-auto-save-${{ steps.version.outputs.version }}.tar
         run: |
-          docker save "${IMAGE_NAME}:${IMAGE_TAG}" -o "${TAR_NAME}"
+          docker pull "${GHCR_IMAGE}:${{ steps.version.outputs.version }}"
+          docker save "${GHCR_IMAGE}:${{ steps.version.outputs.version }}" -o "${TAR_NAME}"
           sha256sum "${TAR_NAME}" > "${TAR_NAME}.sha256"
           ls -lh "${TAR_NAME}" "${TAR_NAME}.sha256"
-          echo "tar_size=$(stat -c %s "${TAR_NAME}")" >> "$GITHUB_OUTPUT"
 
       - name: Publish .tar as Release asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v${{ steps.version.outputs.version }}
+          TAR_NAME: quark-auto-save-${{ steps.version.outputs.version }}.tar
         run: |
           gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || \
             gh release create "${RELEASE_TAG}" \
               --target dev \
-              --title "Dev 镜像 (.tar)" \
-              --notes "dev 分支自动构建的镜像（仅 linux/amd64）。
-          在线拉取：docker pull ${GHCR_IMAGE}:${IMAGE_TAG}
+              --title "镜像 v${{ steps.version.outputs.version }}" \
+              --notes "dev 分支构建的镜像（仅 linux/amd64）。
+          在线拉取：docker pull ${GHCR_IMAGE}:${{ steps.version.outputs.version }}
+          或固定 SHA：docker pull ${GHCR_IMAGE}:${{ steps.version.outputs.sha_tag }}
           离线导入：docker load -i ${TAR_NAME}
           校验命令：sha256sum -c ${TAR_NAME}.sha256"
           gh release upload "${RELEASE_TAG}" "${TAR_NAME}" "${TAR_NAME}.sha256" --clobber
@@ -95,9 +108,9 @@ jobs:
       - name: Upload .tar as workflow artifact (backup)
         uses: actions/upload-artifact@v4
         with:
-          name: quark-auto-save-dev-tar
+          name: quark-auto-save-${{ steps.version.outputs.version }}-tar
           path: |
-            ${{ env.TAR_NAME }}
-            ${{ env.TAR_NAME }}.sha256
+            quark-auto-save-${{ steps.version.outputs.version }}.tar
+            quark-auto-save-${{ steps.version.outputs.version }}.tar.sha256
           retention-days: 14
           if-no-files-found: error
