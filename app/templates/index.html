@@ -395,8 +395,8 @@
                         <div class="input-group-prepend" title="剧集季数：仅在替换表达式留空时对 $TV 剧集规则生效，把季号固定为所选季">
                           <span class="input-group-text px-2">季数</span>
                         </div>
-                        <div class="dropdown" style="flex: 0 0 92px;" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
-                          <button class="btn btn-outline-secondary dropdown-toggle w-100 text-left season-toggle" type="button" data-toggle="dropdown" :disabled="!isTvRegex(task.pattern)">
+                        <div class="dropdown season-dropdown" style="flex: 0 0 92px;" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
+                          <button class="form-control dropdown-toggle text-left season-toggle" type="button" data-toggle="dropdown" :disabled="!isTvRegex(task.pattern)">
                             {{ task.season ? 'S' + String(task.season).padStart(2, '0') : '原始' }}
                           </button>
                           <div class="dropdown-menu season-menu">
