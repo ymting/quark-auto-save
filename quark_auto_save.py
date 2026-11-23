@@ -147,9 +147,15 @@ class Config:
 
 class MagicRename:
 
+    # $TV 识别基准：按展开后的匹配表达式内容判定，兼容内置 $TV、自定义魔法名、
+    # 以及双击释放成的原始正则，避免依赖具体的魔法名。
+    TV_PATTERN = (
+        r".*?([Ss]\d{1,2})?(?:[第EePpXx\.\-\_\( ]{1,2}|^)(\d{1,3})(?!\d).*?\.(mp4|mkv)"
+    )
+
     magic_regex = {
         "$TV": {
-            "pattern": r".*?([Ss]\d{1,2})?(?:[第EePpXx\.\-\_\( ]{1,2}|^)(\d{1,3})(?!\d).*?\.(mp4|mkv)",
+            "pattern": TV_PATTERN,
             "replace": r"\1E\2.\3",
         },
         "$BLACK_WORD": {
@@ -216,13 +222,31 @@ class MagicRename:
         """设置任务名称"""
         self.magic_variable["{TASKNAME}"] = taskname
 
-    def magic_regex_conv(self, pattern, replace):
-        """魔法正则匹配"""
+    TV_DEFAULT_REPLACE = r"\1E\2.\3"
+
+    def magic_regex_conv(self, pattern, replace, season=""):
+        """魔法正则匹配
+
+        season: 任务级季数（如 "3" 或 "03"）。仅当展开后的匹配表达式是
+        $TV 类剧集正则、且替换表达式仍是 $TV 默认替换式 \1E\2.\3 时，
+        把其中表示季号的 \1 固定为所选季（如 S03E\2.\3）。
+        用户填写了自定义替换表达式时以其为准，不做任何注入。
+        """
         keyword = pattern
         if keyword in self.magic_regex:
             pattern = self.magic_regex[keyword]["pattern"]
             if replace == "":
                 replace = self.magic_regex[keyword]["replace"]
+        # 判定基准用展开后的 pattern，兼容内置 $TV、自定义魔法名和释放出的原始正则；
+        # 仅在替换式留空或仍是 $TV 默认式时注入，确保自定义替换表达式优先。
+        # 季数无效（空、0、非数字）时完全不注入，保持原有行为。
+        if pattern == self.TV_PATTERN and season and replace in ("", self.TV_DEFAULT_REPLACE):
+            try:
+                season_num = int(str(season).strip())
+            except (ValueError, TypeError):
+                season_num = 0
+            if season_num > 0:
+                replace = self.TV_DEFAULT_REPLACE.replace(r"\1", f"S{season_num:02d}", 1)
         return pattern, replace
 
     def sub(self, pattern, replace, file_name):
@@ -917,7 +941,9 @@ class Quark:
 
         # 魔法正则转换
         pattern, replace = mr.magic_regex_conv(
-            task.get("pattern", ""), task.get("replace", "")
+            task.get("pattern", ""),
+            task.get("replace", ""),
+            task.get("season", ""),
         )
         # 需保存的文件清单
         need_save_list = []
@@ -1190,6 +1216,11 @@ def do_save(account, tasklist=[]):
             print(f"正则匹配: {task['pattern']}")
         if task.get("replace"):
             print(f"正则替换: {task['replace']}")
+        if task.get("season"):
+            try:
+                print(f"剧集季数: S{int(task['season']):02d}")
+            except (ValueError, TypeError):
+                print(f"剧集季数: {task['season']}")
         if task.get("update_subdir"):
             print(f"更子目录: {task['update_subdir']}")
         if task.get("runweek") or task.get("enddate"):
