@@ -400,11 +400,11 @@
                             {{ task.season ? 'S' + String(task.season).padStart(2, '0') : '原始' }}
                           </button>
                           <div class="dropdown-menu season-menu">
-                            <a class="dropdown-item" href="#" @click.prevent="task.season = ''" :class="{active: !task.season}">原始</a>
-                            <a class="dropdown-item" href="#" v-for="n in 30" :key="n" @click.prevent="task.season = String(n)" :class="{active: task.season === String(n)}">S{{ String(n).padStart(2, '0') }}</a>
+                            <a class="dropdown-item" href="#" @click.prevent="selectSeason(task, '')" :class="{active: !task.season}">原始</a>
+                            <a class="dropdown-item" href="#" v-for="n in 30" :key="n" @click.prevent="selectSeason(task, String(n))" :class="{active: task.season === String(n)}">S{{ String(n).padStart(2, '0') }}</a>
                           </div>
                         </div>
-                        <input type="text" name="replace[]" class="form-control" v-model="task.replace" placeholder="替换表达式">
+                        <input type="text" name="replace[]" class="form-control" v-model="task.replace" @input="onReplaceInput(task)" placeholder="替换表达式" title="选择季数后会自动填入带季号的替换式，可在此基础上继续修改">
                         <div class="input-group-append" title="保存时只比较文件名的部分，01.mp4 和 01.mkv 视同为同一文件，不重复转存">
                           <div class="input-group-text">
                             <input type="checkbox" v-model="task.ignore_extension">&nbsp;忽略后缀
@@ -767,6 +767,41 @@
           const raw = this.formData.magic_regex[pattern] ? this.formData.magic_regex[pattern].pattern : pattern;
           return raw === tvPattern;
         },
+        // 取规则默认替换式，把其中季号固定为所选季，用于自动填入替换表达式框
+        buildSeasonReplace(pattern, season) {
+          const tvDefault = "\\1E\\2.\\3";
+          let base = tvDefault;
+          if (this.formData.magic_regex[pattern]) {
+            base = this.formData.magic_regex[pattern].replace || tvDefault;
+          }
+          const tag = 'S' + String(season).padStart(2, '0');
+          let r = base.replace(/\{SXX\}/g, tag)
+                      .replace(/\{S\}/g, String(Number(season)))
+                      .replace(/\\1/g, tag);
+          // 默认替换式里写死的季号（如 S01）也换成所选季
+          r = r.replace(/S\d{1,2}(?=E|\.|\b)/gi, tag);
+          return r;
+        },
+        // 选季数：若替换框为空或季数是刚刚自动填入的，就自动填入带季号的替换式，方便在此基础上改
+        selectSeason(task, season) {
+          task.season = season;
+          if (season) {
+            const filled = this.buildSeasonReplace(task.pattern, season);
+            if (!task.replace || task._seasonAutoFilled) {
+              task.replace = filled;
+              task._seasonAutoFilled = true;
+            }
+          } else if (task._seasonAutoFilled) {
+            // 选回"原始"且替换框是自动填的，则清空，恢复默认行为
+            task.replace = '';
+            task._seasonAutoFilled = false;
+          }
+          this.configModified = true;
+        },
+        // 用户手动编辑替换框后，解除自动填充标记，避免后续选季覆盖用户自定义
+        onReplaceInput(task) {
+          task._seasonAutoFilled = false;
+        },
         changeTab(tab) {
           this.activeTab = tab;
           if (window.innerWidth <= 768) {
@@ -775,12 +810,13 @@
         },
         checkNewVersion() {
           this.versionTips = this.version;
-          axios.get('https://api.github.com/repos/Cp0204/quark-auto-save/tags')
+          // 检查自己 fork 的最新 Release（releases 不继承原作者，tag 会继承，故用 releases/latest）
+          axios.get('https://api.github.com/repos/ymting/quark-auto-save/releases/latest')
             .then(response => {
-              latestVersion = response.data[0].name;
+              const latestVersion = response.data.tag_name;
               console.log(`检查版本：当前 ${this.version} 最新 ${latestVersion}`);
               if (latestVersion != this.version) {
-                this.versionTips += ` <sup><span class="position-absolute badge badge-pill badge-danger">${latestVersion}</span></sup>`;
+                this.versionTips += ` <sup><span class="position-absolute badge badge-pill badge-danger">${latestVersion} 可更新</span></sup>`;
               }
             })
             .catch(error => {
@@ -862,7 +898,16 @@
           }
         },
         saveConfig() {
-          axios.post('/update', this.formData)
+          // 剔除前端临时字段（如 _seasonAutoFilled），不写入配置
+          const payload = JSON.parse(JSON.stringify(this.formData));
+          if (payload.tasklist) {
+            payload.tasklist.forEach(task => {
+              Object.keys(task).forEach(key => {
+                if (key.startsWith('_')) delete task[key];
+              });
+            });
+          }
+          axios.post('/update', payload)
             .then(response => {
               if (response.data.success) {
                 this.configModified = false;
@@ -1390,6 +1435,7 @@
         copyTaskToClipboard(index) {
           const task = { ...this.formData.tasklist[index] };
           delete task.addition;
+          Object.keys(task).forEach(key => { if (key.startsWith('_')) delete task[key]; });
           const _this = this;
           this.copyText(JSON.stringify(task), function () {
             _this.showToast("任务参数已复制到剪贴板", "success");
