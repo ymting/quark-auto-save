@@ -547,6 +547,12 @@
             </div>
             <div class="alert alert-warning" v-if="fileSelect.error">{{ fileSelect.error }}</div>
             <div v-else>
+              <!-- 后端实际生效的规则（诊断用：确认季数是否注入） -->
+              <div class="alert alert-info mb-3" v-if="fileSelect.previewRegex && fileSelect.effectiveRegex">
+                <b>实际生效规则</b>（后端计算结果，用于核对季数是否注入）<br>
+                <span>季数：<b>{{ fileSelect.effectiveRegex.season ? 'S' + String(fileSelect.effectiveRegex.season).padStart(2,'0') : '未指定' }}</b></span><br>
+                <span>替换式：<code>{{ fileSelect.effectiveRegex.replace || '（空，不重命名）' }}</code></span>
+              </div>
               <!-- 正则处理表达式 -->
               <div class="mb-3" v-if="fileSelect.previewRegex && fileSelect.index<this.formData.tasklist.length">
                 <div><b>匹配表达式：</b><span class="badge badge-info">{{ formData.tasklist[fileSelect.index].pattern }}</span>
@@ -704,6 +710,7 @@
           selectShare: true,
           switchShare: false,
           previewRegex: false,
+          effectiveRegex: null,
           sortBy: "updated_at",
           sortOrder: "desc"
         },
@@ -1226,6 +1233,7 @@
             magic_regex: this.formData.magic_regex,
           }).then(response => {
             if (response.data.success) {
+              this.fileSelect.effectiveRegex = response.data.data.regex_effective || null;
               this.fileSelect.fileList = response.data.data.list;
               this.sortFileList(this.fileSelect.sortBy, this.fileSelect.sortOrder);
               this.fileSelect.paths = response.data.data.paths;

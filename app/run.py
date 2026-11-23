@@ -402,6 +402,13 @@ def get_share_detail():
                 else:
                     share_file["file_name_re"] = file_name_re
 
+        # 回传后端实际生效的规则，便于前端核对（尤其确认季数是否注入）
+        data["regex_effective"] = {
+            "pattern": pattern,
+            "replace": replace,
+            "season": task.get("season", ""),
+        }
+
         # 文件列表排序
         if re.search(r"\{I+\}", replace):
             mr.set_dir_file_list(dir_file_list, replace)
