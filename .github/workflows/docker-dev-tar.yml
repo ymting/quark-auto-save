@@ -61,6 +61,16 @@ jobs:
       - name: Push image to GHCR
         run: docker push "${GHCR_IMAGE}:${IMAGE_TAG}"
 
+      - name: Make GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # GITHUB_TOKEN 具备 packages: write；把 container package 设为公开以便在线拉取
+          gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "user/packages/container/${IMAGE_NAME}" \
+            -f visibility=public || echo "::warning::设置 package 可见性失败，请到包设置页手动改为 Public"
+
       - name: Export image to .tar (docker save)
         run: |
           docker save "${IMAGE_NAME}:${IMAGE_TAG}" -o "${TAR_NAME}"
