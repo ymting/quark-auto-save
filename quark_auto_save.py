@@ -257,6 +257,9 @@ class MagicRename:
                 # 2) 魔法变量替换式：固定季号变量（先长后短，避免 {S} 误匹配 {SXX}）
                 replace = replace.replace("{SXX}", season_tag)
                 replace = replace.replace("{S}", str(season_num))
+                # 3) 默认替换式里写死的季号（如 {TASKNAME}.S01E\2.\3 中的 S01）也要覆盖；
+                #    仅匹配 S 后紧跟 1-2 位数字且再跟 E/句点/结尾的片段，避免误伤普通文本
+                replace = re.sub(r"(?i)S\d{1,2}(?=E|\.|\b)", season_tag, replace)
         return pattern, replace
 
     def sub(self, pattern, replace, file_name):
