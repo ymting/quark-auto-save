@@ -392,8 +392,11 @@
                           <button class="btn btn-outline-secondary" type="button" @click="fileSelect.selectDir=true;fileSelect.switchShare=false;fileSelect.previewRegex=true;fileSelect.sortBy='file_name';fileSelect.sortOrder='asc';showShareSelect(index)" title="预览正则处理效果">正则处理</button>
                         </div>
                         <input type="text" name="pattern[]" class="form-control" v-model="task.pattern" placeholder="匹配表达式" list="magicRegex" @dblclick="inputRawMagicRegex(task)" title="双击可将魔法匹配释放为填入原始正则表达式">
-                        <select name="season[]" class="form-control" style="flex: 0 0 82px;" v-model="task.season" :disabled="!isTvRegex(task.pattern)" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
-                          <option value="">季:原</option>
+                        <div class="input-group-prepend" title="剧集季数：仅在替换表达式留空时对 $TV 剧集规则生效，把季号固定为所选季">
+                          <span class="input-group-text px-1">季数</span>
+                        </div>
+                        <select name="season[]" class="form-control" style="flex: 0 0 74px;" v-model="task.season" :disabled="!isTvRegex(task.pattern)" :title="isTvRegex(task.pattern) ? '仅在替换表达式留空时生效：将 $TV 的季号固定为所选季（如 S03E01.mp4）；填写了自定义替换表达式则以自定义为准' : '仅当上方使用 $TV 剧集正则时可选'">
+                          <option value="">原始</option>
                           <option v-for="n in 30" :key="n" :value="String(n)">S{{ String(n).padStart(2, '0') }}</option>
                         </select>
                         <input type="text" name="replace[]" class="form-control" v-model="task.replace" placeholder="替换表达式">
@@ -783,6 +786,10 @@
               config_data.tasklist = config_data.tasklist.map(task => {
                 if (!task.hasOwnProperty('runweek')) {
                   task.runweek = [1, 2, 3, 4, 5, 6, 7];
+                }
+                // 老任务兼容：补齐季数字段，避免下拉框显示空白
+                if (!task.hasOwnProperty('season')) {
+                  this.$set(task, 'season', '');
                 }
                 return task;
               });
